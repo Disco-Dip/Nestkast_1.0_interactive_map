@@ -1,0 +1,10 @@
+name: interactive_map
+title:
+username: disco-dip
+account: disco-dip
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 15696307
+bundleId: 11017912
+url: https://disco-dip.shinyapps.io/interactive_map/
+version: 1
