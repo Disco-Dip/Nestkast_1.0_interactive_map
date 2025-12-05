@@ -57,6 +57,23 @@ server <- function(input, output, session) {
   # Store box-selected points
   found_locs <- reactiveVal(character(0))
   
+  zoom_state <- reactiveValues(x = NULL, y = NULL)
+  
+  relayout_data <- reactive({
+    event_data("plotly_relayout")
+  }) %>% debounce(250)
+  
+  observeEvent(relayout_data(), {
+    evt <- relayout_data()
+    if (!is.null(evt[["xaxis.range[0]"]])) {
+      zoom_state$x <- c(evt[["xaxis.range[0]"]], evt[["xaxis.range[1]"]])
+    }
+    if (!is.null(evt[["yaxis.range[0]"]])) {
+      zoom_state$y <- c(evt[["yaxis.range[0]"]], evt[["yaxis.range[1]"]])
+    }
+  })
+  
+  
   # ---------------------------
   # Reactive filtered data
   # ---------------------------
@@ -119,6 +136,39 @@ server <- function(input, output, session) {
     found_locs(intersect(found_locs(), visible_locs))
   })
   
+  # ---------------------------------------------------------
+  # Click on a point to toggle inside/outside status
+  # ---------------------------------------------------------
+  observeEvent(event_data("plotly_click", source = "mapPlot"), {
+    click <- event_data("plotly_click", source = "mapPlot")
+    if (is.null(click$key)) return()
+    
+    clicked_loc <- click$key
+    current <- found_locs()
+    
+    # 1. If clicked point is already inside → remove it
+    if (clicked_loc %in% current) {
+      new_set <- setdiff(current, clicked_loc)
+      found_locs(new_set)
+      
+      # If ALL remaining filtered points are out → reset to default
+      visible <- unique(filtered_data()$modern_location)
+      if (length(new_set) > 0 && all(!(visible %in% new_set))) {
+        found_locs(character(0))
+      }
+      
+      # 2. If clicked point is outside → add it to inside
+    } else {
+      found_locs(unique(c(current, clicked_loc)))
+    }
+    
+    # 3. After toggling, if NO points remain inside → reset
+    if (length(found_locs()) == 0) {
+      found_locs(character(0))
+    }
+  })
+  
+  
   # ---------------------------
   # Points for plotting (with status)
   # ---------------------------
@@ -160,8 +210,11 @@ server <- function(input, output, session) {
       theme(axis.title=element_blank(), axis.text=element_blank(),
             axis.ticks=element_blank(), axis.line=element_blank())
     
-    ggplotly(p, tooltip="text", source="mapPlot") %>%
-      layout(dragmode="select", showlegend = FALSE) %>%
+    ggplotly(p, tooltip="text", source="mapPlot") |>
+      event_register("plotly_relayout") |>
+      layout(dragmode="select", showlegend = FALSE,
+             xaxis = isolate(if (!is.null(zoom_state$x)) list(range = zoom_state$x) else NULL),
+             yaxis = isolate(if (!is.null(zoom_state$y)) list(range = zoom_state$y) else NULL)) |>
       config(scrollZoom=TRUE, displayModeBar=TRUE)
   })
   
