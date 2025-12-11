@@ -1,3 +1,12 @@
+## Nestkast 1.0 interactive map
+## Last updated: 11-12-2025
+## Author: Wietske Oosterkamp
+
+# This app allows the user to interact with a map showing the Netherlands in 1900 with the areas found in the nestkast 1.0 dataset.
+# The user can filter to find specific areas, species or years.
+# Points on the map can also be selected by clicking or dragging a box around points.
+# A summary table gives the summary values for all selected areas.
+
 library(shiny)
 library(dplyr)
 library(ggplot2)
@@ -23,6 +32,7 @@ ui <- fluidPage(
     "))
   ),
   
+  # filters
   div(class = "floating-panel",
       selectInput("selected_location", "Search for an area",
                   choices = c("None", sort(unique(data$modern_location))),
@@ -52,11 +62,15 @@ ui <- fluidPage(
 # ----------------------
 
 server <- function(input, output, session) {
+  
+  # no filter as default state
   nofilter <- "None"
   
-  # Store box-selected points
+  # Store selected points
   found_locs <- reactiveVal(character(0))
   
+  # The idea is that the zoom state is stored so the plot does not zoom back out after redrawing when selecting points.
+  # It just does not work yet.
   zoom_state <- reactiveValues(x = NULL, y = NULL)
   
   relayout_data <- reactive({
@@ -98,6 +112,7 @@ server <- function(input, output, session) {
     df <- data
     
     # Apply filters except for the one being updated
+    # area
     loc_choices <- df
     if (!is.null(input$filter_species) && input$filter_species != nofilter) {
       loc_choices <- loc_choices %>% filter(species == input$filter_species)
@@ -109,6 +124,7 @@ server <- function(input, output, session) {
                       choices = c(nofilter, sort(unique(loc_choices$modern_location))),
                       selected = input$selected_location)
     
+    # species
     species_choices <- df
     if (!is.null(input$selected_location) && input$selected_location != nofilter) {
       species_choices <- species_choices %>% filter(modern_location == input$selected_location)
@@ -120,6 +136,7 @@ server <- function(input, output, session) {
                       choices = c(nofilter, sort(unique(species_choices$species))),
                       selected = input$filter_species)
     
+    # year
     year_choices <- df
     if (!is.null(input$selected_location) && input$selected_location != nofilter) {
       year_choices <- year_choices %>% filter(modern_location == input$selected_location)
@@ -137,7 +154,7 @@ server <- function(input, output, session) {
   })
   
   # ---------------------------------------------------------
-  # Click on a point to toggle inside/outside status
+  # Click on a point to toggle inside/outside (selection) status
   # ---------------------------------------------------------
   observeEvent(event_data("plotly_click", source = "mapPlot"), {
     click <- event_data("plotly_click", source = "mapPlot")
@@ -194,7 +211,7 @@ server <- function(input, output, session) {
     color_map <- c(
       "default" = "#B22600",
       "inside"  = "#B22600",
-      "outside" = "#F0B0A3"
+      "outside" = "#D6A598"
     )
     
     p <- ggplot() +
@@ -235,7 +252,7 @@ server <- function(input, output, session) {
     if(length(found_locs()) > 0){
       actionButton("clear_selection", "Clear selection", class = "btn-warning")
     } else {
-      NULL  # no button if nothing selected
+      NULL  # no button if nothing is selected
     }
   })
   
@@ -277,21 +294,11 @@ server <- function(input, output, session) {
     }
     
     tibble(
-      Metric = c("Areas", "Species", "Years", "Records"#,
-                 #if (!is.null(input$filter_species) && input$filter_species != nofilter)
-                #   paste0("Records for ", input$filter_species),
-                # if (!is.null(input$filter_year) && input$filter_year != nofilter)
-                #   paste0("Records for ", input$filter_year)
-                ),
+      Metric = c("Areas", "Species", "Years", "Records"),
       Value  = c(n_distinct(df$modern_location),
                  n_distinct(df$species),
                  n_distinct(df$year),
-                 nrow(df)#,
-                 #if (!is.null(input$filter_species) && input$filter_species != nofilter)
-                #   nrow(df %>% filter(species == input$filter_species)),
-                # if (!is.null(input$filter_year) && input$filter_year != nofilter)
-                #   nrow(df %>% filter(year == as.numeric(input$filter_year)))
-                )
+                 nrow(df))
     )
   })
 }
